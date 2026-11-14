@@ -592,6 +592,12 @@ function cpuChoose() {
   return choice !== null ? choice : pick(open);
 }
 
+const RTC_CONFIG = { iceServers: [
+  { urls: 'stun:stun.l.google.com:19302' },
+  { urls: 'stun:stun1.l.google.com:19302' },
+  { urls: ['turn:free.expressturn.com:3478', 'turn:free.expressturn.com:3478?transport=tcp'], username: '000000002110042789', credential: '23LssHaWJWoMRGpHIIyflNkllYw=' }
+] };
+let joinTimer = null;
 let peer = null, conn = null, currentCode = '';
 const CODE_CHARS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
 
@@ -632,7 +638,7 @@ function hostRoom(tries = 0) {
     hostRoom(tries + 1);
   }, 6000);
 
-  peer = new Peer('c4-' + code);
+  peer = new Peer('c4-' + code, { config: RTC_CONFIG });
   peer.on('open', () => {
     opened = true;
     clearTimeout(timer);
@@ -656,7 +662,13 @@ function joinRoom(raw) {
   if (typeof Peer === 'undefined') { setOnlineMsg('Online play needs internet. Check your connection and reload.'); return; }
   closePeer();
   setOnlineMsg('Connecting…');
-  peer = new Peer();
+  joinTimer = setTimeout(() => {
+    if (!state.connected) {
+      setOnlineMsg("Couldn't reach your friend. Check the code, make sure they're waiting in the room, and try again.");
+      closePeer();
+    }
+  }, 15000);
+  peer = new Peer(undefined, { config: RTC_CONFIG });
   peer.on('open', () => {
     const c = peer.connect('c4-' + code, { reliable: true });
     setupConn(c, 2);
@@ -669,7 +681,7 @@ function joinRoom(raw) {
 
 function setupConn(c, me) {
   conn = c;
-  c.on('open', () => { state.connected = true; startOnline(me); });
+  c.on('open', () => { state.connected = true; clearTimeout(joinTimer); startOnline(me); });
   c.on('data', onData);
   c.on('close', onDisconnect);
   c.on('error', onDisconnect);
@@ -720,6 +732,7 @@ function onDisconnect() {
 }
 
 function closePeer() {
+  clearTimeout(joinTimer);
   if (conn) { try { conn.close(); } catch (e) {} conn = null; }
   if (peer) { try { peer.destroy(); } catch (e) {} peer = null; }
   state.connected = false;
