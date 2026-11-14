@@ -156,6 +156,9 @@
   }
   .codeInput:focus { outline: none; border-color: var(--ink); }
   #joinRow { display: flex; flex-direction: column; gap: 10px; }
+  .statRow { display: flex; justify-content: space-between; gap: 10px; padding: 10px 2px; border-bottom: 1px solid var(--line); font-size: 15px; text-align: left; }
+  .statRow span { color: var(--muted); }
+  #statsBody { display: flex; flex-direction: column; margin-bottom: 8px; }
 </style>
 </head>
 <body>
@@ -178,6 +181,7 @@
       </div>
     </div>
     <button class="btn alt" id="cpuBtn">Vs Computer<span class="sub">You play red</span></button>
+    <button class="btn alt" id="statsBtn">Stats</button>
   </div>
 </section>
 
@@ -233,6 +237,15 @@
     <p>The moves in this game will be lost.</p>
     <button class="btn" id="restartYes">Restart</button>
     <button class="btn alt" id="restartNo">Keep playing</button>
+  </div>
+</div>
+
+<div class="overlay" id="statsCard">
+  <div class="card">
+    <h2>Stats</h2>
+    <div id="statsBody"></div>
+    <button class="btn alt" id="resetStats">Reset stats</button>
+    <button class="btn" id="statsClose">Close</button>
   </div>
 </div>
 
@@ -431,6 +444,7 @@ function afterMove(p, w) {
   if (w) {
     state.over = true;
     state.scores[p]++;
+    recordResult(statKind(), p === state.human ? 'win' : 'loss');
     state.starter = p === 1 ? 2 : 1;
     winSound();
     vibrate([40, 60, 40]);
@@ -448,6 +462,7 @@ function afterMove(p, w) {
   } else if (!hasLegal()) {
     state.over = true;
     state.scores.d++;
+    recordResult(statKind(), 'draw');
     state.starter = state.starter === 1 ? 2 : 1;
     showEnd('Draw!', '🤝');
   } else {
@@ -871,6 +886,21 @@ $('restartYes').onclick = () => {
   newGame();
 };
 $('restartNo').onclick = () => $('restartCard').classList.remove('show');
+$('statsBtn').onclick = () => { renderStats(); $('statsCard').classList.add('show'); };
+$('statsClose').onclick = () => $('statsCard').classList.remove('show');
+$('resetStats').onclick = () => {
+  const b = $('resetStats');
+  if (b.dataset.armed !== '1') {
+    b.dataset.armed = '1';
+    b.textContent = 'Tap again to reset';
+    setTimeout(() => { b.dataset.armed = ''; b.textContent = 'Reset stats'; }, 3000);
+    return;
+  }
+  b.dataset.armed = '';
+  b.textContent = 'Reset stats';
+  saveStats(EMPTY_STATS());
+  renderStats();
+};
 $('againBtn').onclick = () => {
   if (state.mode === 'online') { requestRematch(); return; }
   $('endCard').classList.remove('show');
@@ -907,6 +937,30 @@ $('shareBtn').onclick = async () => {
   $('onlineCard').classList.add('show');
 })();
 
+const STATS_KEY = 'c4-stats';
+const EMPTY_STATS = () => ({ cpu: { w: 0, l: 0, d: 0 }, online: { w: 0, l: 0, d: 0 }, streak: 0, best: 0 });
+function loadStats() {
+  try { return Object.assign(EMPTY_STATS(), JSON.parse(localStorage.getItem(STATS_KEY))); }
+  catch (e) { return EMPTY_STATS(); }
+}
+function saveStats(s) { try { localStorage.setItem(STATS_KEY, JSON.stringify(s)); } catch (e) {} }
+function statKind() { return state.mode === 'cpu' ? 'cpu' : state.mode === 'online' ? 'online' : null; }
+function recordResult(kind, result) {
+  if (!kind) return;
+  const s = loadStats();
+  if (result === 'win') { s[kind].w++; s.streak = s.streak > 0 ? s.streak + 1 : 1; }
+  else if (result === 'loss') { s[kind].l++; s.streak = s.streak < 0 ? s.streak - 1 : -1; }
+  else { s[kind].d++; s.streak = 0; }
+  s.best = Math.max(s.best, s.streak);
+  saveStats(s);
+}
+function renderStats() {
+  const s = loadStats();
+  const line = (name, val) => '<div class="statRow"><b>' + name + '</b><span>' + val + '</span></div>';
+  const rec = k => k.w + ' W · ' + k.l + ' L · ' + k.d + ' D';
+  const cur = s.streak > 0 ? s.streak + (s.streak === 1 ? ' win' : ' wins') : s.streak < 0 ? (-s.streak) + (s.streak === -1 ? ' loss' : ' losses') : 'none';
+  $('statsBody').innerHTML = line('vs Computer', rec(s.cpu)) + line('Online', rec(s.online)) + line('Current streak', cur) + line('Best win streak', s.best);
+}
 let audioCtx = null, noiseBuf = null, noiseCtx = null;
 function ctx() {
   try {
