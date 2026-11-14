@@ -1,0 +1,11 @@
+{
+  "name": "Connect 4",
+  "short_name": "Connect 4",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#fff4d6",
+  "theme_color": "#0c3478",
+  "icons": [
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" }
+  ]
+}
