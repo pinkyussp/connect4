@@ -1,0 +1,960 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#ffffff">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Connect 4">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-512.png">
+<link rel="icon" href="icon-512.png" type="image/png">
+<title>Connect 4</title>
+
+<script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<style>
+  :root {
+    --ink: #121213;
+    --muted: #6b6f72;
+    --line: #d3d6da;
+    --soft: #f4f5f6;
+    --red: #e5383b;
+    --yellow: #fcc419;
+    --blue: #2d6cdf;
+    --blue-dark: #1f4fae;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; min-height: 100%; background: #fff; }
+  body {
+    font-family: "Helvetica Neue", Helvetica, Arial, system-ui, sans-serif;
+    color: var(--ink);
+    min-height: 100vh;
+    display: flex; flex-direction: column; align-items: center;
+    padding: max(14px, env(safe-area-inset-top)) 14px max(18px, env(safe-area-inset-bottom));
+    user-select: none; -webkit-user-select: none;
+    overflow-x: hidden;
+    touch-action: manipulation;
+  }
+  .screen { width: 100%; display: flex; flex-direction: column; align-items: center; }
+  .hidden { display: none !important; }
+  
+  .btn {
+    font: inherit; font-size: 17px; font-weight: 700; letter-spacing: .3px;
+    border: 2px solid var(--ink); background: var(--ink); color: #fff;
+    border-radius: 8px; min-height: 52px; width: 100%; padding: 10px 16px;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+    cursor: pointer;
+  }
+  .btn span.sub { font-size: 13px; font-weight: 500; opacity: .75; }
+  .btn:active { opacity: .8; }
+  .btn:disabled { opacity: .5; cursor: default; }
+  .btn.alt { background: #fff; color: var(--ink); border-color: var(--line); }
+  .btn.alt span.sub { color: var(--muted); }
+  .btn.small { width: auto; min-height: 38px; padding: 6px 14px; font-size: 14px; }
+  .btn:focus-visible, .seg button:focus-visible, .iconbtn:focus-visible { outline: 3px solid var(--blue); outline-offset: 2px; }
+
+  .iconbtn {
+    width: 40px; height: 40px; border-radius: 8px; border: 2px solid var(--line); background: #fff;
+    font-size: 18px; cursor: pointer; display: flex; align-items: center; justify-content: center;
+  }
+  
+  #startScreen { flex: 1; justify-content: center; gap: 10px; padding: 7vh 0 24px; min-height: 86vh; }
+  .discs { display: flex; gap: 8px; margin-bottom: 6px; }
+  .disc-big { width: 34px; height: 34px; border-radius: 50%; }
+  #startScreen h1 {
+    margin: 4px 0 0; font-size: 42px; font-weight: 800; letter-spacing: 3px;
+  }
+  .tagline { margin: 0 0 22px; font-weight: 500; color: var(--muted); font-size: 16px; text-align: center; }
+  .menuBtns { width: min(92vw, 340px); display: flex; flex-direction: column; gap: 12px; }
+  .diffRow { display: flex; flex-direction: column; gap: 6px; align-items: center; margin: 6px 0; }
+  .diffRow label { font-size: 12px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .1em; }
+  .seg { display: flex; border: 2px solid var(--line); border-radius: 8px; padding: 2px; width: 100%; background: #fff; }
+  .seg button {
+    flex: 1; border: none; background: transparent; font: inherit; font-weight: 700; font-size: 15px;
+    padding: 9px; border-radius: 6px; color: var(--muted); cursor: pointer; min-height: 42px;
+  }
+  .seg button.on { background: var(--ink); color: #fff; }
+  
+  #gameScreen { gap: 0; }
+  .topbar { width: min(96vw, 480px); display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 2px 0 12px; }
+  .topbar .right { display: flex; gap: 8px; }
+  #turnPill {
+    flex: 1; min-height: 38px; display: flex; align-items: center; justify-content: center; gap: 8px;
+    font-size: 15px; font-weight: 700; border-radius: 999px; padding: 6px 12px;
+    border: 2px solid var(--line); background: #fff;
+  }
+  #turnPill .dot { width: 14px; height: 14px; border-radius: 50%; display: inline-block; border: 1px solid rgba(0,0,0,.15); }
+  .dots i { display: inline-block; width: 5px; height: 5px; margin-left: 3px; border-radius: 50%; background: currentColor; animation: blink 1s infinite; }
+  .dots i:nth-child(2) { animation-delay: .2s; }
+  .dots i:nth-child(3) { animation-delay: .4s; }
+  @keyframes blink { 0%, 80%, 100% { opacity: .2; } 40% { opacity: 1; } }
+
+  .scorebar { display: flex; gap: 10px; width: min(96vw, 480px); margin-bottom: 14px; }
+  .chip {
+    flex: 1; display: flex; align-items: center; gap: 10px; padding: 9px 12px;
+    border-radius: 10px; border: 2px solid var(--line); background: #fff;
+    opacity: .55; min-width: 0;
+  }
+  .chip.right { flex-direction: row-reverse; text-align: right; }
+  .chip.active { opacity: 1; border-color: var(--ink); }
+  .chip .mini { width: 26px; height: 26px; flex: 0 0 26px; border-radius: 50%; }
+  .chip .txt { flex: 1; min-width: 0; }
+  .chip .name { font-size: 13px; font-weight: 600; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .chip .score { font-size: 24px; font-weight: 800; line-height: 1.1; }
+  
+  .r { background: var(--red); }
+  .y { background: var(--yellow); }
+  
+  #stage { position: relative; width: min(96vw, 480px); }
+  .dropRow { display: grid; grid-template-columns: repeat(7, 1fr); width: 100%; padding: 0 8px; height: 48px; }
+  .drop {
+    background: none; border: none; padding: 0; display: flex; align-items: center; justify-content: center;
+    cursor: pointer; border-radius: 10px;
+  }
+  .drop:disabled { cursor: default; }
+  .ghost { width: 72%; aspect-ratio: 1; border-radius: 50%; opacity: 0; }
+  .drop:not(:disabled):hover .ghost, .drop:not(:disabled).hot .ghost { opacity: .85; }
+  
+  .board {
+    width: 100%; display: grid; grid-template-columns: repeat(7, 1fr);
+    background: var(--blue);
+    border-radius: 16px; padding: 8px;
+  }
+  .hole {
+    position: relative; width: 100%; aspect-ratio: 1; border-radius: 50%;
+    background: #fff;
+    box-shadow: inset 0 0 0 1px rgba(0,0,0,.08);
+  }
+  .piece { position: absolute; inset: 9%; border-radius: 50%; }
+  .piece.last::after {
+    content: ""; position: absolute; left: 50%; top: 50%; width: 22%; height: 22%;
+    transform: translate(-50%, -50%); border-radius: 50%; background: rgba(255,255,255,.9);
+  }
+  .piece.win { animation: pulse .6s ease-in-out infinite alternate; }
+  @keyframes pulse { from { transform: scale(1); } to { transform: scale(1.1); } }
+  .flying { position: absolute; left: 0; top: 0; border-radius: 50%; z-index: 5; pointer-events: none; will-change: transform; }
+  
+  .overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,.4);
+    display: flex; align-items: center; justify-content: center; padding: 20px;
+    z-index: 10; visibility: hidden; opacity: 0; transition: opacity .15s, visibility .15s;
+  }
+  .overlay.show { visibility: visible; opacity: 1; }
+  .card {
+    background: #fff; border-radius: 14px; padding: 24px 22px 22px; text-align: center;
+    width: min(88vw, 340px); border: 2px solid var(--line);
+    display: flex; flex-direction: column; gap: 10px;
+  }
+  .card .trophy { font-size: 44px; line-height: 1; }
+  .card h2 { margin: 0; font-size: 28px; font-weight: 800; }
+  .card p { margin: 0 0 6px; color: var(--muted); font-size: 15px; }
+  .codeBig { font-size: 38px; font-weight: 800; letter-spacing: 6px; padding: 8px 0; color: var(--blue); }
+  .codeInput {
+    font: inherit; font-size: 22px; font-weight: 700; letter-spacing: 5px; text-align: center; text-transform: uppercase;
+    border: 2px solid var(--line); border-radius: 8px; padding: 10px; width: 100%; min-height: 52px; background: #fff; color: var(--ink);
+  }
+  .codeInput:focus { outline: none; border-color: var(--ink); }
+  #joinRow { display: flex; flex-direction: column; gap: 10px; }
+</style>
+</head>
+<body>
+
+<section id="startScreen" class="screen">
+  <div class="discs">
+    <div class="disc-big r"></div>
+    <div class="disc-big y"></div>
+  </div>
+  <h1>CONNECT 4</h1>
+  <p class="tagline">Get four in a row before they do.</p>
+  <div class="menuBtns">
+    <button class="btn" id="pvpBtn">2 Players<span class="sub">Pass the phone</span></button>
+    <button class="btn" id="onlineBtn">Play online<span class="sub">Play a friend on another phone</span></button>
+    <div class="diffRow">
+      <label>Computer level</label>
+      <div class="seg" id="levelSeg">
+        <button data-level="easy">Easy</button>
+        <button data-level="hard" class="on">Hard</button>
+      </div>
+    </div>
+    <button class="btn alt" id="cpuBtn">Vs Computer<span class="sub">You play red</span></button>
+  </div>
+</section>
+
+<section id="gameScreen" class="screen hidden">
+  <div class="topbar">
+    <button class="btn alt small" id="menuBtn" aria-label="Main menu">← Menu</button>
+    <div id="turnPill"></div>
+    <div class="right">
+      <button class="iconbtn" id="soundBtn" aria-label="Sound on or off">🔊</button>
+    </div>
+  </div>
+  <div class="scorebar">
+    <div class="chip" id="chipR">
+      <div class="mini r"></div>
+      <div class="txt"><div class="name" id="nameR">Red</div><div class="score" id="scoreR">0</div></div>
+    </div>
+    <div class="chip right" id="chipY">
+      <div class="mini y"></div>
+      <div class="txt"><div class="name" id="nameY">Yellow</div><div class="score" id="scoreY">0</div></div>
+    </div>
+  </div>
+  <div id="stage">
+    <div class="dropRow" id="dropRow"></div>
+    <div class="board" id="board"></div>
+  </div>
+  <div style="margin-top:18px; width:min(96vw,480px);">
+    <button class="btn alt" id="restartBtn">Restart game</button>
+  </div>
+</section>
+
+<div class="overlay" id="onlineCard">
+  <div class="card">
+    <div class="trophy">🌐</div>
+    <h2>Play online</h2>
+    <p id="onlineText">Play with a friend on any phone or computer.</p>
+    <button class="btn" id="hostBtn">Create room</button>
+    <div id="codeBox" class="hidden">
+      <div class="codeBig" id="codeText"></div>
+      <button class="btn alt" id="shareBtn">Share code or link</button>
+    </div>
+    <div id="joinRow">
+      <input class="codeInput" id="joinCode" maxlength="5" placeholder="CODE" autocapitalize="characters" autocomplete="off">
+      <button class="btn alt" id="joinBtn">Join room</button>
+    </div>
+    <button class="btn alt" id="onlineClose">Cancel</button>
+  </div>
+</div>
+
+<div class="overlay" id="restartCard">
+  <div class="card">
+    <div class="trophy">🔄</div>
+    <h2>Restart?</h2>
+    <p>The moves in this game will be lost.</p>
+    <button class="btn" id="restartYes">Restart</button>
+    <button class="btn alt" id="restartNo">Keep playing</button>
+  </div>
+</div>
+
+<div class="overlay" id="endCard">
+  <div class="card">
+    <div class="trophy" id="endTrophy">🏆</div>
+    <h2 id="endTitle">Game over</h2>
+    <p id="endText"></p>
+    <button class="btn" id="againBtn">Play again</button>
+    <button class="btn alt" id="toMenuBtn">Main menu</button>
+  </div>
+</div>
+
+<script>
+const ROWS = 6, COLS = 7, EMPTY = 0;
+const FLY_MS = 240;
+const CENTER_FIRST = [3, 2, 4, 1, 5, 0, 6];
+const DIRS = [[0, 1], [1, 0], [1, 1], [1, -1]];
+const $ = id => document.getElementById(id);
+const boardEl = $('board');
+const dropRow = $('dropRow');
+const stageEl = $('stage');
+
+const state = {
+  board: [],
+  turn: 1,
+  mode: 'pvp',
+  level: 'hard',
+  human: 1,
+  starter: 1,
+  over: false,
+  busy: false,
+  thinking: false,
+  last: null,
+  moves: 0,
+  scores: { 1: 0, 2: 0, d: 0 },
+  muted: localStorage.getItem('c4-muted') === '1',
+  connected: false,
+  rematchMe: false,
+  rematchThem: false,
+};
+
+for (let c = 0; c < COLS; c++) {
+  const b = document.createElement('button');
+  b.className = 'drop';
+  b.setAttribute('aria-label', 'Drop in column ' + (c + 1));
+  const g = document.createElement('div');
+  g.className = 'ghost';
+  b.appendChild(g);
+  b.addEventListener('click', () => humanMove(c));
+  dropRow.appendChild(b);
+}
+for (let i = 0; i < ROWS * COLS; i++) {
+  const h = document.createElement('div');
+  h.className = 'hole';
+  h.dataset.col = i % COLS;
+  boardEl.appendChild(h);
+}
+boardEl.addEventListener('pointerover', e => {
+  if (e.pointerType !== 'mouse') return;
+  const h = e.target.closest('.hole');
+  setHot(h ? Number(h.dataset.col) : -1);
+});
+boardEl.addEventListener('pointerleave', () => setHot(-1));
+boardEl.addEventListener('click', e => {
+  const h = e.target.closest('.hole');
+  if (h) humanMove(Number(h.dataset.col));
+});
+function setHot(c) {
+  [...dropRow.children].forEach((b, i) => {
+    const on = i === c;
+    if (b.classList.contains('hot') !== on) b.classList.toggle('hot', on);
+  });
+}
+
+function emptyBoard() {
+  return Array.from({ length: ROWS }, () => Array(COLS).fill(EMPTY));
+}
+function rowIn(b, c) {
+  for (let r = ROWS - 1; r >= 0; r--) if (b[r][c] === EMPTY) return r;
+  return -1;
+}
+function legal(c) { return state.board[0][c] === EMPTY; }
+function rowFor(c) { return rowIn(state.board, c); }
+function hasLegal() {
+  for (let c = 0; c < COLS; c++) if (legal(c)) return true;
+  return false;
+}
+function winLine(p, b = state.board) {
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      if (b[r][c] !== p) continue;
+      for (const [dr, dc] of DIRS) {
+        const cells = [[r, c]];
+        for (let k = 1; k < 4; k++) {
+          const rr = r + dr * k, cc = c + dc * k;
+          if (rr < 0 || rr >= ROWS || cc < 0 || cc >= COLS || b[rr][cc] !== p) break;
+          cells.push([rr, cc]);
+        }
+        if (cells.length === 4) return cells;
+      }
+    }
+  }
+  return null;
+}
+function hasFour(b, p) { return !!winLine(p, b); }
+
+function notMyTurn() {
+  return (state.mode === 'cpu' || state.mode === 'online') && state.turn !== state.human;
+}
+function isCpuTurn() {
+  return state.mode === 'cpu' && notMyTurn() && !state.over;
+}
+function labelFor(p) {
+  if (state.mode === 'cpu') return p === state.human ? 'You' : 'Computer';
+  if (state.mode === 'online') return p === state.human ? 'You' : 'Friend';
+  return p === 1 ? 'Red' : 'Yellow';
+}
+
+function paintHole(r, c, win, hide) {
+  const hole = boardEl.children[r * COLS + c];
+  const v = state.board[r][c];
+  hole.textContent = '';
+  if (!v || hide) return;
+  const piece = document.createElement('div');
+  piece.className = 'piece ' + (v === 1 ? 'r' : 'y');
+  if (win && win.some(([wr, wc]) => wr === r && wc === c)) piece.classList.add('win');
+  if (!win && state.last && state.last.r === r && state.last.c === c) piece.classList.add('last');
+  hole.appendChild(piece);
+}
+function renderAll(win) {
+  for (let r = 0; r < ROWS; r++)
+    for (let c = 0; c < COLS; c++) paintHole(r, c, win, false);
+  updateControls();
+}
+
+function humanMove(c) {
+  if (state.over || state.busy || state.thinking) return;
+  if (notMyTurn()) return;
+  if (!legal(c)) { buzz(); return; }
+  if (state.mode === 'online') sendData({ t: 'move', c });
+  play(c);
+}
+
+function play(c) {
+  const p = state.turn;
+  const r = rowFor(c);
+  state.board[r][c] = p;
+  const prev = state.last;
+  state.last = { r, c };
+  state.moves++;
+  state.busy = true;
+  if (prev) paintHole(prev.r, prev.c, null, false);
+  paintHole(r, c, null, true);
+  updateControls();
+  updateStatus();
+  const w = winLine(p);
+  flyDisc(p, r, c, () => {
+    paintHole(r, c, null, false);
+    if (w) renderAll(w);
+    state.busy = false;
+    afterMove(p, w);
+  });
+  vibrate(10);
+}
+
+function flyDisc(p, r, c, done) {
+  const stage = stageEl.getBoundingClientRect();
+  const hole = boardEl.children[r * COLS + c].getBoundingClientRect();
+  const row = dropRow.getBoundingClientRect();
+  const size = hole.width * 0.82;
+  const x = hole.left - stage.left + (hole.width - size) / 2;
+  const yTarget = hole.top - stage.top + (hole.height - size) / 2;
+  const yStart = row.top - stage.top + (row.height - size) / 2;
+
+  const el = document.createElement('div');
+  el.className = 'flying ' + (p === 1 ? 'r' : 'y');
+  el.style.width = size + 'px';
+  el.style.height = size + 'px';
+  stageEl.appendChild(el);
+
+  const bounce = size * 0.12;
+  const frames = [
+    { transform: `translate3d(${x}px, ${yStart}px, 0)`, easing: 'cubic-bezier(.5,0,1,.6)' },
+    { transform: `translate3d(${x}px, ${yTarget}px, 0)`, offset: 0.7, easing: 'ease-out' },
+    { transform: `translate3d(${x}px, ${yTarget - bounce}px, 0)`, offset: 0.86, easing: 'ease-in' },
+    { transform: `translate3d(${x}px, ${yTarget}px, 0)` },
+  ];
+  clackAt(FLY_MS * 0.7, 0.55, 2200);
+  clackAt(FLY_MS * 0.86, 0.2, 1500);
+  const anim = el.animate(frames, { duration: FLY_MS, fill: 'forwards' });
+  anim.onfinish = () => { el.remove(); done(); };
+}
+
+function afterMove(p, w) {
+  if (w) {
+    state.over = true;
+    state.scores[p]++;
+    state.starter = p === 1 ? 2 : 1;
+    winSound();
+    vibrate([40, 60, 40]);
+    let title, trophy = '🏆';
+    if (state.mode === 'cpu') {
+      title = p === state.human ? 'You win!' : 'Computer wins!';
+      if (p !== state.human) trophy = '🤖';
+    } else if (state.mode === 'online') {
+      title = p === state.human ? 'You win!' : 'Friend wins!';
+      if (p !== state.human) trophy = '😅';
+    } else {
+      title = p === 1 ? 'Red wins!' : 'Yellow wins!';
+    }
+    showEnd(title, trophy);
+  } else if (!hasLegal()) {
+    state.over = true;
+    state.scores.d++;
+    state.starter = state.starter === 1 ? 2 : 1;
+    showEnd('Draw!', '🤝');
+  } else {
+    state.turn = p === 1 ? 2 : 1;
+    if (isCpuTurn()) setTimeout(cpuMove, 120);
+  }
+  updateControls();
+  updateStatus();
+}
+
+function cpuMove() {
+  if (state.over || state.busy || !isCpuTurn()) return;
+  state.thinking = true;
+  updateStatus();
+  setTimeout(() => {
+    state.thinking = false;
+    play(cpuChoose());
+  }, 80);
+}
+
+function pick(list) { return list[Math.floor(Math.random() * list.length)]; }
+
+function windowScore(m, t) {
+  if (m && t) return 0;
+  if (m === 3) return 6;
+  if (m === 2) return 2;
+  if (t === 3) return -5;
+  if (t === 2) return -1;
+  return 0;
+}
+function evaluate(b, me, opp) {
+  let score = 0;
+  for (let r = 0; r < ROWS; r++) {
+    if (b[r][3] === me) score += 3;
+    else if (b[r][3] === opp) score -= 3;
+  }
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      for (const [dr, dc] of DIRS) {
+        let m = 0, t = 0, ok = true;
+        for (let k = 0; k < 4; k++) {
+          const rr = r + dr * k, cc = c + dc * k;
+          if (rr < 0 || rr >= ROWS || cc < 0 || cc >= COLS) { ok = false; break; }
+          const v = b[rr][cc];
+          if (v === me) m++; else if (v === opp) t++;
+        }
+        if (ok) score += windowScore(m, t);
+      }
+    }
+  }
+  return score;
+}
+
+let deadline = 0, aborted = false;
+function minimax(b, depth, alpha, beta, maximizing, me, opp) {
+  if (aborted) return 0;
+  if (performance.now() > deadline) { aborted = true; return 0; }
+  if (depth === 0) return evaluate(b, me, opp);
+  const moves = CENTER_FIRST.filter(c => b[0][c] === EMPTY);
+  if (!moves.length) return 0;
+  if (maximizing) {
+    let v = -Infinity;
+    for (const c of moves) {
+      const r = rowIn(b, c);
+      b[r][c] = me;
+      const s = hasFour(b, me) ? 1000000 + depth : minimax(b, depth - 1, alpha, beta, false, me, opp);
+      b[r][c] = EMPTY;
+      if (s > v) v = s;
+      if (v > alpha) alpha = v;
+      if (alpha >= beta) break;
+    }
+    return v;
+  } else {
+    let v = Infinity;
+    for (const c of moves) {
+      const r = rowIn(b, c);
+      b[r][c] = opp;
+      const s = hasFour(b, opp) ? -1000000 - depth : minimax(b, depth - 1, alpha, beta, true, me, opp);
+      b[r][c] = EMPTY;
+      if (s < v) v = s;
+      if (v < beta) beta = v;
+      if (alpha >= beta) break;
+    }
+    return v;
+  }
+}
+
+function searchRoot(depth, me, opp, open, noise, slack) {
+  const b = state.board;
+  const scored = [];
+  for (const c of open) {
+    const r = rowIn(b, c);
+    b[r][c] = me;
+    const s = hasFour(b, me) ? 1000000 : minimax(b, depth - 1, -Infinity, Infinity, false, me, opp);
+    b[r][c] = EMPTY;
+    if (aborted) return null;
+    scored.push({ c, s: s + Math.random() * noise });
+  }
+  const best = Math.max(...scored.map(x => x.s));
+  return pick(scored.filter(x => x.s >= best - slack).map(x => x.c));
+}
+
+function cpuChoose() {
+  const me = state.turn, opp = me === 1 ? 2 : 1;
+  const b = state.board;
+  const hard = state.level === 'hard';
+  const noise = hard ? 6 : 30;
+  const slack = hard ? 4 : 14;
+  const open = CENTER_FIRST.filter(c => legal(c));
+
+  if (b.every(row => row.every(v => v === EMPTY))) return pick([2, 3, 4]);
+
+  for (const c of open) {
+    const r = rowIn(b, c);
+    b[r][c] = me;
+    const won = hasFour(b, me);
+    b[r][c] = EMPTY;
+    if (won) return c;
+  }
+  if (hard) {
+    for (const c of open) {
+      const r = rowIn(b, c);
+      b[r][c] = opp;
+      const threat = hasFour(b, opp);
+      b[r][c] = EMPTY;
+      if (threat) return c;
+    }
+  }
+
+  const maxDepth = hard ? 7 : 2;
+  const budget = hard ? 350 : 60;
+  aborted = false;
+  deadline = performance.now() + budget;
+  let choice = null;
+  for (let d = 2; d <= maxDepth; d++) {
+    aborted = false;
+    const r = searchRoot(d, me, opp, open, noise, slack);
+    if (r === null) break;
+    choice = r;
+    if (performance.now() > deadline) break;
+  }
+  return choice !== null ? choice : pick(open);
+}
+
+let peer = null, conn = null, currentCode = '';
+const CODE_CHARS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+
+function makeCode() {
+  let s = '';
+  for (let i = 0; i < 5; i++) s += CODE_CHARS[Math.floor(Math.random() * CODE_CHARS.length)];
+  return s;
+}
+function setOnlineMsg(t) { $('onlineText').textContent = t; }
+function errorText(type) {
+  if (type === 'peer-unavailable') return 'No room with that code. Check it and try again.';
+  if (type === 'network' || type === 'server-error' || type === 'socket-error') return 'Connection problem. Check your internet and try again.';
+  return 'Something went wrong. Try again.';
+}
+function resetOnlineCard() {
+  $('hostBtn').classList.remove('hidden');
+  $('codeBox').classList.add('hidden');
+  $('joinRow').classList.remove('hidden');
+  $('joinCode').value = '';
+  setOnlineMsg('Play with a friend on any phone or computer.');
+}
+
+function hostRoom(tries = 0) {
+  closePeer();
+  if (typeof Peer === 'undefined') { setOnlineMsg('Online play needs internet. Check your connection and reload.'); return; }
+  const code = makeCode();
+  currentCode = code;
+  $('hostBtn').classList.add('hidden');
+  $('joinRow').classList.add('hidden');
+  $('codeBox').classList.remove('hidden');
+  $('codeText').textContent = code;
+  setOnlineMsg('Connecting…');
+
+  let opened = false;
+  const timer = setTimeout(() => {
+    if (opened) return;
+    if (tries >= 2) { setOnlineMsg('Server is slow right now. Check your connection and try again.'); closePeer(); return; }
+    hostRoom(tries + 1);
+  }, 6000);
+
+  peer = new Peer('c4-' + code);
+  peer.on('open', () => {
+    opened = true;
+    clearTimeout(timer);
+    setOnlineMsg('Waiting for your friend to join…');
+  });
+  peer.on('connection', c => {
+    if (state.connected) { c.close(); return; }
+    setupConn(c, 1);
+  });
+  peer.on('error', err => {
+    clearTimeout(timer);
+    if (err.type === 'unavailable-id') { hostRoom(tries); return; }
+    setOnlineMsg(errorText(err.type));
+    closePeer();
+  });
+}
+
+function joinRoom(raw) {
+  const code = String(raw || '').trim().toUpperCase();
+  if (code.length !== 5) { setOnlineMsg('Type the 5-letter code from your friend.'); return; }
+  if (typeof Peer === 'undefined') { setOnlineMsg('Online play needs internet. Check your connection and reload.'); return; }
+  closePeer();
+  setOnlineMsg('Connecting…');
+  peer = new Peer();
+  peer.on('open', () => {
+    const c = peer.connect('c4-' + code, { reliable: true });
+    setupConn(c, 2);
+  });
+  peer.on('error', err => {
+    setOnlineMsg(errorText(err.type));
+    closePeer();
+  });
+}
+
+function setupConn(c, me) {
+  conn = c;
+  c.on('open', () => { state.connected = true; startOnline(me); });
+  c.on('data', onData);
+  c.on('close', onDisconnect);
+  c.on('error', onDisconnect);
+}
+
+function sendData(obj) {
+  if (conn && conn.open) conn.send(obj);
+}
+
+function onData(msg) {
+  if (!msg || typeof msg !== 'object') return;
+  if (msg.t === 'move') {
+    if (state.busy) { setTimeout(() => onData(msg), 60); return; }
+    const c = Number(msg.c);
+    if (state.mode === 'online' && !state.over && notMyTurn() && Number.isInteger(c) && c >= 0 && c < COLS && legal(c)) {
+      play(c);
+    }
+  } else if (msg.t === 'rematch') {
+    state.rematchThem = true;
+    if (!state.rematchMe) $('againBtn').textContent = 'Friend wants a rematch: tap to play';
+    checkRematch();
+  }
+}
+
+function startOnline(me) {
+  $('onlineCard').classList.remove('show');
+  state.mode = 'online';
+  state.human = me;
+  state.starter = 1;
+  state.scores = { 1: 0, 2: 0, d: 0 };
+  state.rematchMe = false;
+  state.rematchThem = false;
+  $('endCard').classList.remove('show');
+  showScreen('game');
+  newGame();
+}
+
+function onDisconnect() {
+  const was = state.connected;
+  state.connected = false;
+  if (state.mode === 'online' && !state.over && was) {
+    state.over = true;
+    state.busy = false;
+    updateControls();
+    updateStatus();
+    showEnd('Friend left', '🔌');
+  }
+}
+
+function closePeer() {
+  if (conn) { try { conn.close(); } catch (e) {} conn = null; }
+  if (peer) { try { peer.destroy(); } catch (e) {} peer = null; }
+  state.connected = false;
+}
+
+function requestRematch() {
+  state.rematchMe = true;
+  sendData({ t: 'rematch' });
+  const b = $('againBtn');
+  b.disabled = true;
+  b.textContent = 'Waiting for friend…';
+  checkRematch();
+}
+function checkRematch() {
+  if (!(state.rematchMe && state.rematchThem)) return;
+  state.rematchMe = false;
+  state.rematchThem = false;
+  const b = $('againBtn');
+  b.disabled = false;
+  b.textContent = 'Play again';
+  $('endCard').classList.remove('show');
+  newGame();
+}
+
+function updateControls() {
+  const ghostClass = state.turn === 1 ? 'r' : 'y';
+  [...dropRow.children].forEach((b, c) => {
+    const ok = !state.over && !state.busy && !state.thinking && legal(c) && !notMyTurn();
+    b.disabled = !ok;
+    b.firstChild.className = 'ghost ' + ghostClass;
+  });
+}
+
+function updateStatus() {
+  $('nameR').textContent = labelFor(1);
+  $('nameY').textContent = labelFor(2);
+  $('scoreR').textContent = state.scores[1];
+  $('scoreY').textContent = state.scores[2];
+  $('chipR').classList.toggle('active', !state.over && state.turn === 1);
+  $('chipY').classList.toggle('active', !state.over && state.turn === 2);
+
+  const pill = $('turnPill');
+  const colour = state.turn === 1 ? '#e5383b' : '#fcc419';
+  const dot = '<span class="dot" style="background:' + colour + '"></span>';
+  if (state.over) {
+    pill.innerHTML = 'Game over';
+  } else if (state.thinking || isCpuTurn()) {
+    pill.innerHTML = dot + 'Computer is thinking<span class="dots"><i></i><i></i><i></i></span>';
+  } else if (state.mode === 'online') {
+    pill.innerHTML = dot + (notMyTurn() ? "Friend's turn" : 'Your turn');
+  } else if (state.mode === 'cpu') {
+    pill.innerHTML = dot + 'Your turn';
+  } else {
+    pill.innerHTML = dot + (state.turn === 1 ? 'Red' : 'Yellow') + "'s turn";
+  }
+  $('soundBtn').textContent = state.muted ? '🔇' : '🔊';
+}
+
+function showEnd(title, trophy) {
+  setTimeout(() => {
+    $('endTrophy').textContent = trophy;
+    $('endTitle').textContent = title;
+    $('endText').textContent =
+      labelFor(1) + ' ' + state.scores[1] + '  ·  ' + labelFor(2) + ' ' + state.scores[2] +
+      '  ·  Draws ' + state.scores.d;
+    const againBtn = $('againBtn');
+    againBtn.disabled = false;
+    againBtn.textContent = 'Play again';
+    againBtn.classList.toggle('hidden', state.mode === 'online' && !state.connected);
+    $('endCard').classList.add('show');
+  }, 700);
+}
+
+function showScreen(name) {
+  $('startScreen').classList.toggle('hidden', name !== 'start');
+  $('gameScreen').classList.toggle('hidden', name !== 'game');
+  $('restartBtn').classList.toggle('hidden', state.mode === 'online');
+}
+
+function newGame() {
+  state.board = emptyBoard();
+  state.turn = state.starter;
+  state.over = false;
+  state.busy = false;
+  state.thinking = false;
+  state.last = null;
+  state.moves = 0;
+  renderAll();
+  updateStatus();
+  if (isCpuTurn()) setTimeout(cpuMove, 200);
+}
+
+function startMode(mode) {
+  unlockAudio();
+  closePeer();
+  state.mode = mode;
+  state.human = 1;
+  state.starter = 1;
+  state.scores = { 1: 0, 2: 0, d: 0 };
+  $('endCard').classList.remove('show');
+  showScreen('game');
+  newGame();
+}
+
+function goToMenu() {
+  if (state.mode === 'online') {
+    closePeer();
+    state.over = true;
+    state.mode = 'pvp';
+  }
+  $('endCard').classList.remove('show');
+  $('restartCard').classList.remove('show');
+  showScreen('start');
+}
+
+function restart() {
+  if (!state.over && state.moves > 0) { $('restartCard').classList.add('show'); return; }
+  $('endCard').classList.remove('show');
+  newGame();
+}
+
+document.querySelectorAll('#levelSeg button').forEach(btn => {
+  btn.addEventListener('click', () => {
+    state.level = btn.dataset.level;
+    document.querySelectorAll('#levelSeg button').forEach(b => b.classList.toggle('on', b === btn));
+  });
+});
+$('pvpBtn').onclick = () => startMode('pvp');
+$('cpuBtn').onclick = () => startMode('cpu');
+$('menuBtn').onclick = goToMenu;
+$('toMenuBtn').onclick = goToMenu;
+$('restartBtn').onclick = restart;
+$('restartYes').onclick = () => {
+  $('restartCard').classList.remove('show');
+  $('endCard').classList.remove('show');
+  newGame();
+};
+$('restartNo').onclick = () => $('restartCard').classList.remove('show');
+$('againBtn').onclick = () => {
+  if (state.mode === 'online') { requestRematch(); return; }
+  $('endCard').classList.remove('show');
+  newGame();
+};
+$('soundBtn').onclick = () => {
+  state.muted = !state.muted;
+  localStorage.setItem('c4-muted', state.muted ? '1' : '0');
+  updateStatus();
+};
+
+$('onlineBtn').onclick = () => { unlockAudio(); resetOnlineCard(); $('onlineCard').classList.add('show'); };
+$('onlineClose').onclick = () => { closePeer(); $('onlineCard').classList.remove('show'); };
+$('hostBtn').onclick = () => hostRoom(0);
+$('joinBtn').onclick = () => joinRoom($('joinCode').value);
+$('joinCode').addEventListener('keydown', e => { if (e.key === 'Enter') joinRoom($('joinCode').value); });
+$('shareBtn').onclick = async () => {
+  const url = location.origin + location.pathname + '?join=' + currentCode;
+  const text = 'Play Connect 4 with me. Room code: ' + currentCode;
+  if (navigator.share) {
+    try { await navigator.share({ title: 'Connect 4', text, url }); } catch (e) {}
+  } else {
+    try { await navigator.clipboard.writeText(url); setOnlineMsg('Link copied. Send it to your friend.'); }
+    catch (e) { setOnlineMsg('Room code: ' + currentCode); }
+  }
+};
+
+(function checkJoinLink() {
+  const j = new URLSearchParams(location.search).get('join');
+  if (!j) return;
+  resetOnlineCard();
+  $('joinCode').value = j.toUpperCase();
+  setOnlineMsg('Tap Join room to play your friend.');
+  $('onlineCard').classList.add('show');
+})();
+
+let audioCtx = null, noiseBuf = null, noiseCtx = null;
+function ctx() {
+  try {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+    return audioCtx;
+  } catch (e) { return null; }
+}
+function unlockAudio() { ctx(); }
+
+function clack(when, vol, freq) {
+  const a = ctx(); if (!a || state.muted) return;
+  if (noiseCtx !== a) {
+    const len = Math.floor(a.sampleRate * 0.05);
+    noiseBuf = a.createBuffer(1, len, a.sampleRate);
+    const d = noiseBuf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 5);
+    noiseCtx = a;
+  }
+  const src = a.createBufferSource();
+  src.buffer = noiseBuf;
+  const bp = a.createBiquadFilter();
+  bp.type = 'bandpass';
+  bp.frequency.value = freq;
+  bp.Q.value = 1.4;
+  const g = a.createGain();
+  g.gain.value = vol;
+  src.connect(bp).connect(g).connect(a.destination);
+  src.start(when);
+}
+function clackAt(ms, vol, freq) {
+  const a = ctx(); if (!a) return;
+  clack(a.currentTime + ms / 1000, vol, freq);
+}
+function ting(freq, when, vol) {
+  const a = ctx(); if (!a || state.muted) return;
+  const o = a.createOscillator(), g = a.createGain();
+  o.type = 'sine';
+  o.frequency.value = freq;
+  g.gain.setValueAtTime(vol, when);
+  g.gain.exponentialRampToValueAtTime(0.001, when + 0.7);
+  o.connect(g).connect(a.destination);
+  o.start(when);
+  o.stop(when + 0.75);
+}
+function winSound() {
+  const a = ctx(); if (!a) return;
+  const t = a.currentTime + 0.35;
+  [880, 1108, 1318].forEach((f, i) => ting(f, t + i * 0.13, 0.25));
+}
+function buzz() {
+  const a = ctx(); if (a) clack(a.currentTime, 0.3, 500);
+  vibrate(30);
+}
+function vibrate(p) { if (navigator.vibrate) navigator.vibrate(p); }
+
+document.addEventListener('pointerdown', unlockAudio, { once: true });
+
+state.board = emptyBoard();
+renderAll();
+updateStatus();
+</script>
+</body>
+</html>
